@@ -6,68 +6,87 @@ import (
 	"log"
 	"net/http"
 
+	// Import your models package (adjust path 'myapp' if your module name is different)
+	"myapp/models"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
-type UserModel struct {
-	Username string `json:"username"`
-	Password string `json:"password"` // Needed from the client request
-}
-
-// postLoginHandler maneja el login y genera un JWT si el login es exitoso.
+// postLoginHandler handles user login attempts.
 func PostLoginHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var creds UserModel
-		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-			http.Error(w, `{"error": "Cuerpo de solicitud inválido"}`, http.StatusBadRequest)
+		// 1. Decode Request Body into LoginRequest DTO from models package
+		var req models.LoginRequest // Use the DTO from the models package
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			log.Printf("Error decoding login request: %v", err)
+			// Use the factory from the models package
+			response := models.NewErrorResponse("Invalid request body")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
 			return
 		}
 
-		if creds.Username == "" || creds.Password == "" {
-			http.Error(w, `{"error": "Usuario y contraseña requeridos"}`, http.StatusBadRequest)
+		// 2. Basic Validation
+		if req.Username == "" || req.Password == "" {
+			// Use the factory from the models package
+			response := models.NewErrorResponse("Username and password are required")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
 			return
 		}
-		log.Print("algo30")
 
+		// 3. Query Database for User ID and Hashed Password
 		var storedHash string
-		var userID int
-		err := db.QueryRow("SELECT id, password_hash FROM users WHERE username = ?", creds.Username).Scan(&userID, &storedHash)
+		var userID int64 // Use int64 for database IDs
+		err := db.QueryRowContext(r.Context(),
+			"SELECT id, password_hash FROM users WHERE username = ?",
+			req.Username,
+		).Scan(&userID, &storedHash)
+
 		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, `{"error": "Usuario o contraseña inválidos"}`, http.StatusUnauthorized)
-			} else {
-				log.Printf("Error consultando usuario '%s': %v", creds.Username, err)
-				http.Error(w, `{"error": "Error interno del servidor"}`, http.StatusInternalServerError)
+			// Use the factory from the models package
+			response := models.NewErrorResponse("Invalid username or password") // Generic message
+			statusCode := http.StatusUnauthorized
+
+			if err != sql.ErrNoRows {
+				log.Printf("Error querying user '%s': %v", req.Username, err)
+				// Use the factory from the models package
+				response = models.NewErrorResponse("Internal server error")
+				statusCode = http.StatusInternalServerError
 			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(statusCode)
+			json.NewEncoder(w).Encode(response)
 			return
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(creds.Password)); err != nil {
-			http.Error(w, `{"error": "Usuario o contraseña inválidos"}`, http.StatusUnauthorized)
-			return
-		}
-
-		// Autenticación exitosa, generar el token
-		tokenString, expiresAt, err := GenerateJWT(userID)
+		// 4. Compare Provided Password with Stored Hash
+		err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password))
 		if err != nil {
-			log.Printf("Error generando JWT para el usuario %d: %v", userID, err)
-			http.Error(w, `{"error": "Error generando sesión"}`, http.StatusInternalServerError)
+			// Use the factory from the models package
+			response := models.NewErrorResponse("Invalid username or password")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(response)
 			return
 		}
 
-		// Guardar el token en la base de datos
-		if err := StoreToken(db, userID, tokenString, expiresAt); err != nil {
-			log.Printf("Error guardando token para el usuario %d: %v", userID, err)
-			http.Error(w, `{"error": "Error guardando sesión"}`, http.StatusInternalServerError)
-			return
+		// 5. Login Successful - Prepare and Send Success Response
+		log.Printf("Login successful for user ID: %d (%s)", userID, req.Username)
+
+		// Create the specific data payload using the DTO from the models package
+		loginData := models.LoginSuccessData{ // Use the DTO from the models package
+			UserID:   userID,
+			Username: req.Username,
 		}
 
-		log.Printf("Login exitoso para el usuario %d (%s)", userID, creds.Username)
-
-		// Responder con el token JWT
+		// Wrap the data in the standard APIResponse using the factory from the models package
+		response := models.NewSuccessResponse(loginData)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"token": tokenString,
-		})
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 	}
 }

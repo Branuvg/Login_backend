@@ -34,7 +34,6 @@ func main() {
     r.Post("/register", handlers.PostRegisterHandler(db))
     r.Post("/login", handlers.PostLoginHandler(db))
 
-
     // Ruta para obtener datos de usuario (protegida más tarde con JWT)
     // Por ahora, cualquiera puede acceder si conoce el ID
     //r.Get("/users/{userID}", handlers.GetUserHandler(db))
