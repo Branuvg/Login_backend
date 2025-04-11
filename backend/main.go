@@ -8,13 +8,6 @@ import (
     "github.com/go-chi/chi/v5/middleware"
     
 	"myapp/handlers"
-    
-    //cors
-    "github.com/go-chi/cors"
-
-    //database
-    "database/sql"
-    _ "modernc.org/sqlite" // Driver SQLite puro Go
 
 )
 
@@ -50,50 +43,4 @@ func main() {
     port := ":3000"
     log.Printf("Servidor escuchando en puerto %s", port)
     log.Fatal(http.ListenAndServe(port, r))
-}
-
-//database
-
-type UserModel struct {
-    Username string `json:"username"`
-    Password string `json:"password"` // Needed from the client request
-}
-
-// setupDatabase inicializa la conexión a la BD
-func setupDatabase(dbPath string) (*sql.DB, error) {
-    log.Printf("Conectando a la base de datos en: %s", dbPath)
-    // Nota: Con modernc.org/sqlite necesitamos el prefijo "file:" y el nombre del driver es "sqlite"
-    db, err := sql.Open("sqlite", "file:"+dbPath+"?_foreign_keys=on")
-    if err != nil {
-        return nil, err
-    }
-
-    // Es buena idea hacer ping para verificar la conexión inmediatamente
-    if err = db.Ping(); err != nil {
-        db.Close() // Cerrar si el ping falla
-        return nil, err
-    }
-    log.Println("Base de datos conectada exitosamente.")
-    // Podríamos añadir aquí la creación de tablas si no existen
-    // _, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (...)`)
-
-    return db, nil
-}
-
-//cors
-
-// configureCORS retorna un middleware de CORS configurado
-func configureCORS() func(http.Handler) http.Handler {
-    // Configuración básica - ¡Ajustar en producción!
-    corsMiddleware := cors.New(cors.Options{
-        // Permitir orígenes específicos (ej. donde corre su frontend)
-        // Usar "*" es inseguro para producción.
-        AllowedOrigins:   []string{"*", "http://localhost:5500", "http://127.0.0.1:5500"}, // Añadir origen de Live Server si lo usan
-        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-        ExposedHeaders:   []string{"Link"},
-        AllowCredentials: true, // Importante si usan cookies o auth headers
-        MaxAge:           300, // Maximum value not ignored by any of major browsers
-    })
-    return corsMiddleware.Handler
 }
