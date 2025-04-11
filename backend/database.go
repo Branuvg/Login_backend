@@ -15,6 +15,7 @@ type UserModel struct {
     Password string `json:"password"` // Needed from the client request
 }
 
+
 // setupDatabase inicializa la conexión a la BD
 func setupDatabase(dbPath string) (*sql.DB, error) {
     log.Printf("Conectando a la base de datos en: %s", dbPath)

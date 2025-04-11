@@ -19,7 +19,7 @@ type RegisterRequest struct {
 
 // LoginSuccessData defines the structure for the data returned on successful login.
 type LoginSuccessData struct {
-	UserID   int64  `json:"userId"`
+	Token    string `json:"token"`
 	Username string `json:"username"`
 }
 
